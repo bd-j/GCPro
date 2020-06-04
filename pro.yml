@@ -1,0 +1,27 @@
+name: pro
+dependencies:
+  # infrastructure
+  - pep8
+  - pylint
+  - pycodestyle
+  - ipython
+  - jupyterlab
+  # scientific computing
+  - numpy
+  - scipy
+  - matplotlib
+  - h5py
+  # inference
+  - corner
+  - emcee
+  - dynesty
+  # astro
+  - astropy
+
+# --- via setup.py --- 
+# sedpy
+# fsps
+# prospector
+
+# -- optional ---
+# mpi4py
