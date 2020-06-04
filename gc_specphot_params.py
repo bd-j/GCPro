@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, os
+import sys, os, time
 import numpy as np
 
 from prospect import prospect_args
@@ -133,7 +133,7 @@ def build_model(object_redshift=None, luminosity_distance=0.0, fixed_metallicity
 
     # Fit for velocity dispersion.  This adds parameters necessary for fitting for spectral broadening
     model_params.update(TemplateLibrary['spectral_smoothing'])
-    model_params["sigma_smooth"]["prior"] = priors.TopHat(mini=40.0, maxi=400.0)
+    model_params["sigma_smooth"]["prior"] = priors.TopHat(mini=5.0, maxi=100.0)
 
     # This removes the continuum from the spectroscopy. Highly recommended
     # when modeling both photometry & spectroscopy
@@ -191,7 +191,6 @@ def build_model(object_redshift=None, luminosity_distance=0.0, fixed_metallicity
     model_params["tage"]["prior"]    = priors.TopHat(mini=0.1, maxi=13.7)
     model_params["logzsol"]["prior"] = priors.TopHat(mini=-1.98, maxi=0.19)
     model_params["zred"]["prior"]    = priors.TopHat(mini=-0.05, maxi=0.05)
-
 
     # --- Initial Values ---
     # These are not really necessary, but they make the plots look better
