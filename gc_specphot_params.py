@@ -8,6 +8,7 @@ from prospect import prospect_args
 from prospect.fitting import fit_model
 from prospect.io import write_results as writer
 
+VERS = sys.version_info[0]
 
 # --------------
 # Observational Data
@@ -41,7 +42,11 @@ def build_obs(object_name="gc1", **extras):
     # --- Photometric Data ---
 
     # this is the description of the column formats
-    cols = [("filtername", "U20"), ("flux", np.float), ("unc", np.float)]
+    if VERS == 2:
+        stype = "S20"
+    elif VERS == 3:
+        stype = "U20"
+    cols = [("filtername", stype), ("flux", np.float), ("unc", np.float)]
     # read the file
     phot = np.genfromtxt(phot_file, dtype=np.dtype(cols), skip_header=1)
     # And here we instantiate the `Filter()` objects using methods in `sedpy`,
