@@ -1,5 +1,5 @@
 filter_name   flux(mJy)   unc(mJy)
 galex_NUV     0.0134      0.0003
 sdss_g0       0.7762      0.0153
-sdss_i0       2.0535      0.0403
+sdss_i0       2.0534      0.0403
 twomass_Ks    3.0484      0.0604

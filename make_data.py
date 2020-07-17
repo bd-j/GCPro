@@ -14,11 +14,13 @@ phot_snr = 50
 spec_snr = 10
 objname = "gc1"
 
-sps = build_sps()
-model = build_model()
 filternames = ["galex_NUV", "sdss_g0", "sdss_i0", "twomass_Ks"]
 filters = load_filters(filternames)
 obs = dict(filters=filters, wavelength=np.linspace(4000, 7000, 3001), spectrum=None, maggies=None)
+obs["resolution"] = np.interp(obs["wavelength"], [4000., 6500.], [300., 140.])
+
+model = build_model()
+sps = build_sps(set_lsf=True, object_redshift=model.params["zred"], obs=obs)
 
 model.params["mass"] = np.array([1e8])
 model.params["tage"] = np.array([4.])
@@ -37,8 +39,10 @@ with open("{}.phot.dat".format(objname), "w") as out:
         out.write("{:12}  {:6.4f}      {:6.4f}\n".format(f.name, flux*conv, unc*conv))
 
 with open("{}.spec.dat".format(objname), "w") as out:
-    out.write("wavelength(AA)   flux(mJy)   unc(mJy)\n")
+    out.write("wavelength(AA)   flux(mJy)   unc(mJy)   resolution(km/s)\n")
+    fmt = "{:6.3f}     {:6.4f}   {:6.4f}   {:4.1f}\n"
     unc = spec / spec_snr
     flux = spec + unc * np.random.normal(size=len(spec))
+    res = obs["resolution"]
     for i, w in enumerate(obs["wavelength"]):
-        out.write("{:6.3f}     {:6.4f}   {:6.4f}\n".format(w, flux[i]*conv, unc[i]*conv))
+        out.write(fmt.format(w, flux[i]*conv, unc[i]*conv, res[i]))

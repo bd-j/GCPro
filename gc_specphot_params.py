@@ -69,7 +69,8 @@ def build_obs(object_name="gc1", **extras):
     # --- Spectroscopic Data ---
 
     # this is the description of the column formats
-    cols = [("wavelength", np.float), ("flux", np.float), ("unc", np.float)]
+    cols = [("wavelength", np.float), ("flux", np.float),
+            ("unc", np.float), ("resolution", np.float)]
     # read the file
     spec = np.genfromtxt(spec_file, dtype=np.dtype(cols), skip_header=1)
     # add the wavelengths (restframe, vacuum)
@@ -81,7 +82,8 @@ def build_obs(object_name="gc1", **extras):
     # (again, to ignore a particular wavelength set the value of the
     #  corresponding elemnt of the mask to *False*)
     obs['mask'] = spec["unc"] > 0
-
+    # add this key so we can pass it to build_sps
+    obs["resolution"] = spec["resolution"]
     # This function ensures all required keys are present in the obs dictionary,
     # adding default values if necessary
     obs = fix_obs(obs)
@@ -90,7 +92,7 @@ def build_obs(object_name="gc1", **extras):
     return obs
 
 
-def build_sps(zcontinuous=1, **extras):
+def build_sps(zcontinuous=1, set_lsf=True, object_redshift=0.0, obs=None, **extras):
     """
     Parameters
     ----------
@@ -98,10 +100,61 @@ def build_sps(zcontinuous=1, **extras):
         A value of 1 insures that we use interpolation between SSPs to
         have a continuous metallicity parameter (`logzsol`)
         See python-FSPS documentation for details
+
+    set_lsf : bool, optional
+        Whether to smooth the SSPs to the instrumental resolution
+
+    object_redshift : float, optional (default, 0.0)
+        The redshift of the object, necessary for smoothing to instrumental
+        resolution
+
+    obs : dictionary, optional
+        Dictionary with the keys 'wavelength' and 'resolution' that are arrays
+        of the observed frame wavelengths (in AA) and instrumental resolution
+        (in km/s of dispersion), required if smoothing the SSPs to the
+        instrumental resolution
     """
     from prospect.sources import FastSSPBasis
     sps = FastSSPBasis(zcontinuous=zcontinuous)
+    if set_lsf is not None:
+        set_instrumental_lsf(sps.ssp, obs["wavelength"], obs["resolution"],
+                             zred=object_redshift)
     return sps
+
+
+def set_instrumental_lsf(ssp, wave_obs, sigma_v, zred=0.0, miles_fwhm_aa=2.54):
+    """This tells FSPS to smooth the SSPs by the given instrumental velocity
+    dispersion, accounting for the library resolution.
+
+    Parameters
+    ----------
+    ssp: fsps.StellarPopulation() instance
+
+    wave_obs: ndarray of shape (n_wave,)
+        The observed frame wavelengths of the data, in Angstroms
+
+    sigma_v: ndarray of shape (n_wave,)
+        The instrumental resolution at each wavelength, expressed as a velocity
+        dispersion in km/s
+    """
+    ssp.libraries[1].decode("utf-8") == "miles", "Please change FSPS to the MILES libraries."
+    ssp.params['smooth_lsf'] = True
+
+    # Convert restframe library resolution to observed frame velocity dispersion
+    lightspeed = 2.998e5  # km/s
+    wave_rest = wave_obs / (1 + zred)
+    sigma_v_miles = lightspeed * miles_fwhm_aa / 2.355 / wave_rest
+
+    dsv = np.sqrt(np.clip(sigma_v**2 - sigma_v_miles**2, 0, np.inf))
+
+    # Get the duadrature difference between the the instrumental resolution and
+    # the observed frame library resolution
+    # (Zero and negative values are skipped by FSPS)
+    dsv = np.sqrt(np.clip(sigma_v**2 - sigma_v_miles**2, 0, np.inf))
+    # Restrict to regions where MILES is used
+    good = (wave_rest > 3525.0) & (wave_rest < 7500) & np.isfinite(dsv)
+
+    ssp.set_lsf(wave_rest[good], dsv[good])
 
 
 def build_model(object_redshift=None, luminosity_distance=0.0, fixed_metallicity=None,
@@ -222,9 +275,11 @@ def build_noise(**extras):
 # ------------
 
 def build_all(**kwargs):
+    obs = build_obs(**kwargs)
+    sps = build_sps(obs=obs, **kwargs)
 
-    return (build_obs(**kwargs), build_model(**kwargs),
-            build_sps(**kwargs), build_noise(**kwargs))
+    return (obs, build_model(**kwargs),
+            sps, build_noise(**kwargs))
 
 
 if __name__ == '__main__':
@@ -243,6 +298,8 @@ if __name__ == '__main__':
                         help="If set, add nebular emission in the model (and mock).")
     parser.add_argument('--remove_spec_continuum', action="store_true",
                         help="Whether to optimize out a continuum polynomial")
+    parser.add_argument('--set_lsf', action="store_true",
+                        help="Whether to smooth the SSPs to the instrumental resolution")
 
     args = parser.parse_args()
     run_params = vars(args)
@@ -257,7 +314,8 @@ if __name__ == '__main__':
         sys.exit()
 
     # Name your output file. Here it takes the 'outfile' keyword
-    hfile = "{0}_{1}_mcmc.h5".format(args.outfile, int(time.time()))
+    ts = time.strftime("%y%b%d-%H.%M", time.localtime())
+    hfile = "{0}_{1}_results.h5".format(args.outfile, ts)
     output = fit_model(obs, model, sps, noise, **run_params)
 
     writer.write_hdf5(hfile, run_params, model, obs,
